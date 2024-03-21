@@ -1,0 +1,1 @@
+[2024-03-21 03:28:49,451][openai][INFO] - error_code= error_message='Invalid URL (POST /v1/chat/completions/engines/text-davinci-002/completions)' error_param= error_type=invalid_request_error message='OpenAI API error received' stream_error=False
