@@ -34,6 +34,7 @@ def generate_scene_data(save_dir: Union[Path, str], config: DictConfig, scene_pa
         "height": config.resolution.h,
         "enable_physics": False,
         "seed": 42,
+        "gpu_id": 0
     }
     cfg = make_cfg(sim_setting)
     sim = habitat_sim.Simulator(cfg)

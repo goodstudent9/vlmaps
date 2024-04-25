@@ -65,8 +65,8 @@ def get_lseg_feat(
         w_grids = int(math.ceil(1.0 * (pw - crop_size) / stride)) + 1
         with torch.cuda.device_of(image):
             with torch.no_grad():
-                outputs = image.new().resize_(batch, model.out_c, ph, pw).zero_().to(device)
-                logits_outputs = image.new().resize_(batch, len(labels), ph, pw).zero_().to(device)
+                outputs = image.new().resize_(batch, model.out_c, ph, pw).zero_().to(device)#1,512,480,520 是否可以支持更精细的pixel呢？
+                logits_outputs = image.new().resize_(batch, len(labels), ph, pw).zero_().to(device)#[1,1,480,520]
             count_norm = image.new().resize_(batch, 1, ph, pw).zero_().to(device)
         # grid evaluation
         for idh in range(h_grids):
@@ -111,4 +111,4 @@ def get_lseg_feat(
         plt.tight_layout()
         plt.show()
 
-    return outputs
+    return outputs # 1 512 347 520 \1 512 2080 520

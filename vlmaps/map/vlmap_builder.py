@@ -118,7 +118,7 @@ class VLMapBuilder:
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
             depth = load_depth_npy(depth_path)
 
-            # # get pixel-aligned LSeg features
+            # # get pixel-aligned LSeg features 1, 512, 347,520 pixel
             pix_feats = get_lseg_feat(
                 lseg_model, rgb, ["example"], lseg_transform, self.device, crop_size, base_size, norm_mean, norm_std
             )
@@ -207,7 +207,7 @@ class VLMapBuilder:
         mapped_iter_list = list(mapped_iter_set)
         max_id = 0
 
-        # check if there is already saved map
+        # TODO 这个地方有错误，没有办法从原来已有的vlmap来建立
         if os.path.exists(map_path):
             (
                 mapped_iter_list,
@@ -231,9 +231,11 @@ class VLMapBuilder:
             self.device = "mps"
         else:
             self.device = "cpu"
-        lseg_model = LSegEncNet("", arch_option=0, block_depth=0, activation="lrelu", crop_size=crop_size)
+        lseg_model = LSegEncNet("", arch_option=0, block_depth=0, activation="lrelu", crop_size=crop_size)        #这里是Lseg的encoder net
         model_state_dict = lseg_model.state_dict()
         checkpoint_dir = Path(__file__).resolve().parents[1] / "lseg" / "checkpoints"
+        #TODO 更改了check point dir
+        checkpoint_dir = Path("/home/vlmaps/lseg/checkpoints")
         checkpoint_path = checkpoint_dir / "demo_e200.ckpt"
         os.makedirs(checkpoint_dir, exist_ok=True)
         if not checkpoint_path.exists():
@@ -259,7 +261,7 @@ class VLMapBuilder:
                 transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
             ]
         )
-        self.clip_feat_dim = lseg_model.out_c
+        self.clip_feat_dim = lseg_model.out_c  #输出的维度是512维的数据.
         return lseg_model, lseg_transform, crop_size, base_size, norm_mean, norm_std
 
     def _backproject_depth(

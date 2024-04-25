@@ -26,9 +26,9 @@ def main(config: DictConfig) -> None:
     data_dirs = sorted([x for x in data_dir.iterdir() if x.is_dir()])
     vlmap = VLMap(config.map_config, data_dir=data_dirs[config.scene_id])
     vlmap.load_map(data_dirs[config.scene_id])
-    visualize_rgb_map_3d(vlmap.grid_pos, vlmap.grid_rgb)
-    cat = input("What is your interested category in this scene?")
-    # cat = "chair"
+    # visualize_rgb_map_3d(vlmap.grid_pos, vlmap.grid_rgb)
+    # cat = input("What is your interested category in this scene?")
+    cat = ["chair", "desk", "computer"]
 
     vlmap._init_clip()
     print("considering categories: ")

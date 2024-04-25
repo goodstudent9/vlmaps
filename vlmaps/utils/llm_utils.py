@@ -1,5 +1,53 @@
 import os
 import openai
+import requests
+import json
+import time
+api_key = "sk-NwLOzmXkvJyeVeSp378840FdC1B840E4B4D7080a23A5B90e"
+used_url = "https://sapi.onechat.fun/v1/chat/completions"
+class OpenAIClient():
+    def __init__(self,
+                 model="gpt-4",
+                 temperature=0.7,
+                 system_prompt=""):
+
+        self.model = model
+        self.temperature = temperature
+        self.system_prompt = system_prompt
+        self.url = used_url
+
+    def chat(self, prompt):
+
+        try:
+            
+            data = json.dumps({
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": self.system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature" : self.temperature
+            })
+            headers = {
+            'Content-Type': 'application/json',
+            "Authorization": f"Bearer {api_key}",
+            }
+        
+            response = requests.request("POST", self.url, headers=headers, data=data, timeout=(180, 180))
+            response_data = response.json()
+            
+            return response_data["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(e)
+            print('TIMEOUT. Sleeping and trying again.')
+            time.sleep(3)
+
 
 
 def parse_object_goal_instruction(language_instr):
@@ -7,10 +55,11 @@ def parse_object_goal_instruction(language_instr):
     Parse language instruction into a series of landmarks
     Example: "first go to the kitchen and then go to the toilet" -> ["kitchen", "toilet"]
     """
-    import openai
+    #TODO 不再调用openai
+    # import openai
 
-    openai_key = os.environ["OPENAI_KEY"]
-    openai.api_key = openai_key
+    # openai_key = os.environ["OPENAI_KEY"]
+    # openai.api_key = openai_key
     question = f"""
     I: go to the kitchen and then go to the toilet. A: kitchen, toilet
     I: go to the chair and then go to another chair. A: chair, chair
@@ -21,23 +70,30 @@ def parse_object_goal_instruction(language_instr):
     I: Go front left and move to the table, then turn around and find a cushion, later stand next to a column before finally navigate to any appliances. A: table, cushion, column, appliances.
     I: Move to the west of the chair, with the sofa on your right, move to the table, then turn right 90 degree, then find a table. A: chair, table
     I: {language_instr}. A:"""
-    response = openai.Completion.create(
-        engine="text-davinci-002",
-        prompt=question,
-        max_tokens=64,
-        temperature=0.0,
-        stop=None,
-    )
-    result = response["choices"][0]["text"].strip()
-    print("landmarks: ", result)
-    return [x.strip() for x in result.split(",")]
+    #TODO 这里写自己的openai的调用方式
+    openai_model=OpenAIClient(model="gpt-3.5-turbo",
+                             temperature=0,
+                             system_prompt="")
+    response=openai_model.chat(question)
+    # response = openai.Completion.create(
+    #     engine="text-davinci-002",
+    #     prompt=question,
+    #     max_tokens=64,
+    #     temperature=0.0,
+    #     stop=None,
+    # )
+    # result = response["choices"][0]["text"].strip()
+    print("landmarks: ", response)
+    return [x.strip() for x in response.split(",")]
 
 
 def parse_spatial_instruction(language_instr):
-    import openai
-
-    openai_key = os.environ["OPENAI_KEY"]
-    openai.api_key = openai_key
+    # import openai
+    openai_model=OpenAIClient(model="gpt-3.5-turbo",
+                             temperature=0,
+                             system_prompt="")
+    # openai_key = os.environ["OPENAI_KEY"]
+    # openai.api_key = openai_key
     # instructions_list = language_instr.split(",")
     instructions_list = [language_instr]
     results = ""
@@ -162,14 +218,16 @@ robot.move_forward(3)
 # {lang}
     """
         print("lang: ", lang)
-        response = openai.Completion.create(
-            engine="text-davinci-002",
-            prompt=question,
-            max_tokens=400,
-            temperature=0.0,
-            stop="###",
-        )
-        result = response["choices"][0]["text"].strip()
+        response=openai_model.chat(question)
+        # response = openai.Completion.create(
+        #     engine="text-davinci-002",
+        #     prompt=question,
+        #     max_tokens=400,
+        #     temperature=0.0,
+        #     stop="###",
+        # )
+        # result = response["choices"][0]["text"].strip()
+        result = response.strip()
         if result:
             results += result + "\n"
         print(result)
