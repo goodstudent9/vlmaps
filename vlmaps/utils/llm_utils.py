@@ -1,10 +1,12 @@
 import os
+import pdb
 import openai
 import requests
 import json
 import time
 api_key = "sk-NwLOzmXkvJyeVeSp378840FdC1B840E4B4D7080a23A5B90e"
-used_url = "https://sapi.onechat.fun/v1/chat/completions"
+# used_url = "https://chatapi.onechats.top/v1/chat/completions"
+used_url = "https://sapi.onechats.top/v1/chat/completions"
 class OpenAIClient():
     def __init__(self,
                  model="gpt-4",
@@ -38,8 +40,9 @@ class OpenAIClient():
             'Content-Type': 'application/json',
             "Authorization": f"Bearer {api_key}",
             }
-        
-            response = requests.request("POST", self.url, headers=headers, data=data, timeout=(180, 180))
+            
+            response = requests.request("POST", self.url, headers=headers, data=data, timeout=(300, 300))
+                # time.sleep(3)
             response_data = response.json()
             
             return response_data["choices"][0]["message"]["content"]
@@ -73,7 +76,7 @@ def parse_object_goal_instruction(language_instr):
     #TODO 这里写自己的openai的调用方式
     openai_model=OpenAIClient(model="gpt-3.5-turbo",
                              temperature=0,
-                             system_prompt="")
+                             system_prompt="Please help complete the paragraph after A: as example")
     response=openai_model.chat(question)
     # response = openai.Completion.create(
     #     engine="text-davinci-002",
@@ -83,6 +86,12 @@ def parse_object_goal_instruction(language_instr):
     #     stop=None,
     # )
     # result = response["choices"][0]["text"].strip()
+    # pdb.set_trace()
+    if "A:" in response:
+        landmark_i = response.index("A:")
+        response = response[landmark_i+2:].replace("A:", "").replace(" ","")
+    if "." in response:
+        response = response.replace(".","")
     print("landmarks: ", response)
     return [x.strip() for x in response.split(",")]
 

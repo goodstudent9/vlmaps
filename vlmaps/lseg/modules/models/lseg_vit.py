@@ -1,3 +1,4 @@
+import pdb
 import torch
 import torch.nn as nn
 import timm
@@ -5,6 +6,7 @@ import types
 import math
 import torch.nn.functional as F
 import clip
+from transformers import AutoModel
 
 activations = {}
 
@@ -84,6 +86,9 @@ class ProjectReadout(nn.Module):
         self.project = nn.Sequential(nn.Linear(2 * in_features, in_features), nn.GELU())
 
     def forward(self, x):
+        # pdb.set_trace()
+        if isinstance(x, tuple):
+            x = x[0]
         readout = x[:, 0].unsqueeze(1).expand_as(x[:, self.start_index :])
         features = torch.cat((x[:, self.start_index :], readout), -1)
 
@@ -101,11 +106,15 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit(pretrained, x):
+def forward_vit(pretrained, x, backbone):
     b, c, h, w = x.shape
     
     # encoder
-    glob = pretrained.model.forward_flex(x)
+    if backbone == "siglip_vitl16_384":
+        glob = pretrained.model.forward_flex(x,backbone)
+
+    else:
+        glob = pretrained.model.forward_flex(x,backbone)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -162,8 +171,8 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w):
 
     return posemb
 
-
-def forward_flex(self, x):
+#forward_flex1 是原来的forward_flex
+def forward_flex1(self, x):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -198,6 +207,35 @@ def forward_flex(self, x):
 
     x = self.norm(x)
 
+    return x
+
+def forward_flex(self, x, backbone):
+    
+    b, c, h, w = x.shape
+ 
+    #这里的x维度必须是 bs 3 384 384
+    # x = F.interpolate(x, size=(384, 384), mode='bilinear', align_corners=False)
+    # pdb.set_trace()
+    x = self.embeddings.patch_embedding(x).flatten(2).transpose(1, 2)
+    # pos_embed = self._resize_pos_embed(
+    #     self.pos_embed, h // self.patch_size[1], w // self.patch_size[0]
+    # )
+    
+    pos_embed = self._resize_pos_embed(
+        self.embeddings.position_embedding.weight.unsqueeze(0), h // self.patch_size[1], w // self.patch_size[0]
+    )
+    x = x + pos_embed
+    # x = self.pos_drop(x)
+
+    
+    
+    for blk in self.encoder.layers:
+        x = blk(x,attention_mask = None, output_attentions=False)
+        if not isinstance(x, torch.Tensor):
+            x = x[0]
+    # pdb.set_trace()
+    
+    x = self.post_layernorm(x)
     return x
 
 
@@ -289,6 +327,159 @@ def _make_pretrained_clip_vitb32_384(pretrained, use_readout="ignore", hooks=Non
     )
     return clip_pretrained, pretrained
 
+def _make_pretrained_siglip_vitl16_384(
+    pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
+):
+    # pdb.set_trace()
+    model = AutoModel.from_pretrained("google/siglip-large-patch16-384")
+    siglip_pretrained = model.text_model
+    # TODO 这里添加操作使得clip_pretrained部分的参数不可更新
+    for param in siglip_pretrained.parameters():
+        param.requires_grad = False
+    # model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
+    # model = timm.create_model('vit_large_patch16_siglip_384',pretrained=pretrained)
+
+    hooks = [5, 11, 17, 23] if hooks == None else hooks
+    # pdb.set_trace()
+    pretrained = _make_vit_b16_backbone_sig(
+        model,
+        features=[256, 512, 1024, 1024],
+        hooks=hooks,
+        vit_features=1024,
+        use_readout=use_readout,
+        enable_attention_hooks=enable_attention_hooks,
+        start_index = 0
+    )
+    return siglip_pretrained, pretrained
+
+def _make_vit_b16_backbone_sig(
+    model,
+    features=[96, 192, 384, 768],
+    size=[384, 384],
+    hooks=[2, 5, 8, 11],
+    vit_features=768,
+    use_readout="ignore",
+    start_index=1,
+    enable_attention_hooks=False,
+):
+    pretrained = nn.Module()
+
+    pretrained.model = model.vision_model
+    pretrained.model.encoder.layers[hooks[0]].register_forward_hook(get_activation("1"))
+    pretrained.model.encoder.layers[hooks[1]].register_forward_hook(get_activation("2"))
+    pretrained.model.encoder.layers[hooks[2]].register_forward_hook(get_activation("3"))
+    pretrained.model.encoder.layers[hooks[3]].register_forward_hook(get_activation("4"))
+
+    pretrained.activations = activations
+
+    if enable_attention_hooks:
+        pretrained.model.blocks[hooks[0]].attn.register_forward_hook(
+            get_attention("attn_1")
+        )
+        pretrained.model.blocks[hooks[1]].attn.register_forward_hook(
+            get_attention("attn_2")
+        )
+        pretrained.model.blocks[hooks[2]].attn.register_forward_hook(
+            get_attention("attn_3")
+        )
+        pretrained.model.blocks[hooks[3]].attn.register_forward_hook(
+            get_attention("attn_4")
+        )
+        pretrained.attention = attention
+
+    readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
+
+    # 32, 48, 136, 384
+    pretrained.act_postprocess1 = nn.Sequential(
+        readout_oper[0],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[0],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+        nn.ConvTranspose2d(
+            in_channels=features[0],
+            out_channels=features[0],
+            kernel_size=4,
+            stride=4,
+            padding=0,
+            bias=True,
+            dilation=1,
+            groups=1,
+        ),
+    )
+
+    pretrained.act_postprocess2 = nn.Sequential(
+        readout_oper[1],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[1],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+        nn.ConvTranspose2d(
+            in_channels=features[1],
+            out_channels=features[1],
+            kernel_size=2,
+            stride=2,
+            padding=0,
+            bias=True,
+            dilation=1,
+            groups=1,
+        ),
+    )
+
+    pretrained.act_postprocess3 = nn.Sequential(
+        readout_oper[2],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[2],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+    )
+
+    pretrained.act_postprocess4 = nn.Sequential(
+        readout_oper[3],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[3],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+        nn.Conv2d(
+            in_channels=features[3],
+            out_channels=features[3],
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        ),
+    )
+
+    pretrained.model.start_index = start_index
+    pretrained.model.patch_size = [16, 16]
+
+    # We inject this function into the VisionTransformer instances so that
+    # we can use it with interpolated position embeddings without modifying the library source.
+    pretrained.model.forward_flex = types.MethodType(forward_flex, pretrained.model)
+    pretrained.model._resize_pos_embed = types.MethodType(
+        _resize_pos_embed, pretrained.model
+    )
+
+    return pretrained
 
 def _make_vit_b32_backbone(
     model,

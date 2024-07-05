@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import pdb
 from typing import Any, Dict, List, Tuple, Union
 import gdown
 
@@ -13,6 +14,9 @@ import numpy as np
 from omegaconf import DictConfig, OmegaConf
 from scipy.ndimage import binary_closing, binary_dilation, gaussian_filter
 import torch
+from transformers import AutoModel
+from transformers import AutoProcessor
+
 
 from vlmaps.utils.clip_utils import get_text_feats_multiple_templates
 from vlmaps.utils.visualize_utils import pool_3d_label_to_2d
@@ -72,6 +76,7 @@ class VLMap(Map):
             self.base2cam_tf,
             self.base_transform,
         )
+        # pdb.set_trace()
         if self.map_config.pose_info.pose_type == "mobile_base":
             self.map_builder.create_mobile_base_map()
         elif self.map_config.pose_info.pose_type == "camera":
@@ -79,7 +84,8 @@ class VLMap(Map):
 
     def load_map(self, data_dir: str) -> bool:
         self._setup_paths(data_dir)
-        self.map_save_path = Path(data_dir) / "vlmap" / "vlmaps.h5df"
+        #TODO 在这里更换建立好的地图
+        self.map_save_path = Path(data_dir) / "vlmap_siglip" / "vlmaps.h5df"
         if not self.map_save_path.exists():
             print("Loading VLMap failed because the file doesn't exist.")
             return False
@@ -104,6 +110,7 @@ class VLMap(Map):
             self.device = "mps"
         else:
             self.device = "cpu"
+        # self.device = "cpu"
         self.clip_version = clip_version
         self.clip_feat_dim = {
             "RN50": 1024,
@@ -118,6 +125,24 @@ class VLMap(Map):
         print("Loading CLIP model...")
         self.clip_model, self.preprocess = clip.load(self.clip_version)  # clip.available_models()
         self.clip_model.to(self.device).eval()
+
+    def _init_siglip(self):
+        print("Loading SigLiP model...")
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
+        self.clip_feat_dim = 1024
+        model = AutoModel.from_pretrained("google/siglip-large-patch16-384")
+        self.siglip_text_enc = model.text_model
+        self.siglip_text_enc.to(self.device).eval()
+        self.clip_model = self.siglip_text_enc
+        
+
+        
+
 
     def init_categories(self, categories: List[str]) -> np.ndarray:
         self.categories = categories
@@ -162,12 +187,14 @@ class VLMap(Map):
     ):
         if self.obstacles_cropped is None and self.obstacles_map is None:
             self.generate_obstacle_map()
+        # pdb.set_trace()
         if not hasattr(self, "clip_model"):
             print("init_clip in customize obstacle map")
-            self._init_clip()
+            # self._init_clip()
+            self._init_siglip()
 
         self.obstacles_new_cropped = get_dynamic_obstacles_map_3d(
-            self.clip_model,
+            self.siglip_text_enc,
             self.obstacles_cropped,
             self.map_config.potential_obstacle_names,
             self.map_config.obstacle_names,
@@ -178,6 +205,9 @@ class VLMap(Map):
             self.clip_feat_dim,
             vis=vis,
         )
+
+
+        
         self.obstacles_new_cropped = Map._dilate_map(
             self.obstacles_new_cropped == 0,
             self.map_config.dilate_iter,

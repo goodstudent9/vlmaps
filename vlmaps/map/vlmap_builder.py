@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pdb
 from typing import Any, Dict, List, Tuple, Union, Set
 
 from tqdm import tqdm
@@ -75,7 +76,7 @@ class VLMapBuilder:
         self.init_cam_tf = self.init_base_tf @ self.base2cam_tf
         self.inv_init_cam_tf = np.linalg.inv(self.init_cam_tf)
 
-        self.map_save_dir = self.data_dir / "vlmap"
+        self.map_save_dir = self.data_dir / "vlmap_siglip"
         os.makedirs(self.map_save_dir, exist_ok=True)
         self.map_save_path = self.map_save_dir / "vlmaps.h5df"
 
@@ -231,12 +232,14 @@ class VLMapBuilder:
             self.device = "mps"
         else:
             self.device = "cpu"
-        lseg_model = LSegEncNet("", arch_option=0, block_depth=0, activation="lrelu", crop_size=crop_size)        #这里是Lseg的encoder net
+        # not_changed = True
+        lseg_model = LSegEncNet("", arch_option=0, block_depth=0, activation="lrelu", crop_size=crop_size, not_changed=False)        #这里是Lseg的encoder net
         model_state_dict = lseg_model.state_dict()
         checkpoint_dir = Path(__file__).resolve().parents[1] / "lseg" / "checkpoints"
-        #TODO 更改了check point dir
         checkpoint_dir = Path("/home/vlmaps/lseg/checkpoints")
-        checkpoint_path = checkpoint_dir / "demo_e200.ckpt"
+        #TODO 更改了check point dir
+        checkpoint_path = checkpoint_dir / "siglip.ckpt"
+        # checkpoint_path = checkpoint_dir / "ver_8_39.ckpt"
         os.makedirs(checkpoint_dir, exist_ok=True)
         if not checkpoint_path.exists():
             print("Downloading LSeg checkpoint...")
@@ -248,6 +251,7 @@ class VLMapBuilder:
         pretrained_state_dict = torch.load(checkpoint_path, map_location=self.device)
         pretrained_state_dict = {k.lstrip("net."): v for k, v in pretrained_state_dict["state_dict"].items()}
         model_state_dict.update(pretrained_state_dict)
+        # pdb.set_trace()
         lseg_model.load_state_dict(pretrained_state_dict)
 
         lseg_model.eval()

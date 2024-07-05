@@ -23,8 +23,9 @@ class Navigator:
         """
         start = self._convert_full_map_pos_to_cropped_map_pos(start_full_map)
         goal = self._convert_full_map_pos_to_cropped_map_pos(goal_full_map)
-        if self._check_if_start_in_graph_obstacle(start):
-            self._rebuild_visgraph(start, vis)
+        #TODO 不再建立新的地图
+        # if self._check_if_start_in_graph_obstacle(start):
+        #     self._rebuild_visgraph(start, vis)
         paths = plan_to_pos_v2(start, goal, self.obs_map, self.visgraph, vis)
         paths = self.shift_path(paths, self.rowmin, self.colmin)
         return paths

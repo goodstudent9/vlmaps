@@ -501,7 +501,7 @@ def save_3d_map(
         if grid_rgb is not None:
             f.create_dataset("grid_rgb", data=grid_rgb)
 
-
+# TODO 利用这个函数来获取到需要的网格特征
 def load_3d_map(map_path: str) -> Tuple[Set[int], np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load 3D voxel map with features
 

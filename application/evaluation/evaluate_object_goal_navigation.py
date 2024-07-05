@@ -1,9 +1,12 @@
 import os
+import pdb
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 from pathlib import Path
 import numpy as np
 from omegaconf import DictConfig
 import hydra
-
+import sys
+sys.path.append("/home/vlmaps/")
 from vlmaps.task.habitat_object_nav_task import HabitatObjectNavigationTask
 from vlmaps.robot.habitat_lang_robot import HabitatLanguageRobot
 from vlmaps.utils.llm_utils import parse_object_goal_instruction
@@ -27,6 +30,7 @@ def main(config: DictConfig) -> None:
         scene_ids = config.scene_id
 
     for scene_i, scene_id in enumerate(scene_ids):
+        # pdb.set_trace()
         robot.setup_scene(scene_id)
         robot.map.init_categories(mp3dcat.copy())
         object_nav_task.setup_scene(robot.vlmaps_dataloader)
@@ -34,6 +38,7 @@ def main(config: DictConfig) -> None:
 
         for task_id in range(len(object_nav_task.task_dict)):
             object_nav_task.setup_task(task_id)
+            # pdb.set_trace()
             object_categories = parse_object_goal_instruction(object_nav_task.instruction)
             print(f"instruction: {object_nav_task.instruction}")
             robot.empty_recorded_actions()
@@ -47,8 +52,8 @@ def main(config: DictConfig) -> None:
             robot.set_agent_state(object_nav_task.init_hab_tf)
             for action in recorded_actions_list:
                 object_nav_task.test_step(robot.sim, action, vis=config.nav.vis)
-
-            save_dir = robot.vlmaps_dataloader.data_dir / (config.map_config.map_type + "_obj_nav_results")
+            #TODO 在这里存储导航的结果
+            save_dir = robot.vlmaps_dataloader.data_dir / (config.map_config.map_type + "_obj_nav_results_siglip")
             os.makedirs(save_dir, exist_ok=True)
             save_path = save_dir / f"{task_id:02}.json"
             object_nav_task.save_single_task_metric(save_path)

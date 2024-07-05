@@ -18,7 +18,7 @@ def load_metric(filepath: Union[str, Path]):
     return num_subgoals, success, num_success_subgoals, data
 
 
-def compute_metric(data_dir: Union[str, Path], scene_ids: List[int], metric_folder_name="vlmap_obj_nav_results"):
+def compute_metric(data_dir: Union[str, Path], scene_ids: List[int], metric_folder_name="vlmap_obj_nav_results_dinov2"):
     vlmaps_data_save_dirs = [
         data_dir / x for x in sorted(os.listdir(data_dir)) if x != ".DS_Store"
     ]  # ignore artifact generated in MacOS

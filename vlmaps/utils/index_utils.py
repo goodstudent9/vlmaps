@@ -1,8 +1,9 @@
 import os
+import pdb
 import cv2
 import numpy as np
 import openai
-from vlmaps.utils.clip_utils import get_text_feats, multiple_templates
+from vlmaps.utils.clip_utils import get_siglip_text_feats, get_text_feats, multiple_templates
 from vlmaps.utils.llm_utils import OpenAIClient
 
 def find_similar_category_id(class_name, classes_list):
@@ -17,12 +18,12 @@ def find_similar_category_id(class_name, classes_list):
     # openai.api_key = openai_key
     classes_list_str = ",".join(classes_list)
     question = f"""
-    Q: What is television most relevant to among tv_monitor,plant,chair. A:tv_monitor\n
-    Q: What is drawer most relevant to among tv_monitor,chest_of_drawers,chair. A:chest_of_drawers\n
+    Q: What is television most relevant to among tv_monitor,plant,chair. A:tv_monitor
+    Q: What is drawer most relevant to among tv_monitor,chest_of_drawers,chair. A:chest_of_drawers
     Q: What is {class_name} most relevant to among {classes_list_str}. A:"""
     openai_model=OpenAIClient(model="gpt-3.5-turbo",
                              temperature=0,
-                             system_prompt="")
+                             system_prompt="Complete like example after A: without whitespace.")
     response=openai_model.chat(question)
     # response = openai.Completion.create(
     #     engine="text-davinci-002",
@@ -33,7 +34,8 @@ def find_similar_category_id(class_name, classes_list):
     # )
     # result = response["choices"][0]["text"].strip()
     # print(f"Similar category of {class_name} is {result}")
-    return classes_list.index(response)
+    get_class = response.replace("A:", "").replace(" ","")
+    return classes_list.index(get_class)
 
 
 def get_segment_islands_pos(segment_map, label_id, detect_internal_contours=False):
@@ -87,8 +89,9 @@ def get_lseg_score(
     if use_multiple_templates:
         mul_tmp = multiple_templates.copy()
         multi_temp_landmarks_other = [x.format(lm) for lm in landmarks_other for x in mul_tmp]
-        text_feats = get_text_feats(multi_temp_landmarks_other, clip_model, clip_feat_dim)
-
+        # pdb.set_trace()
+        # text_feats = get_text_feats(multi_temp_landmarks_other, clip_model, clip_feat_dim)
+        text_feats = get_siglip_text_feats(multi_temp_landmarks_other, clip_model, 1024)
         # average the features
         if avg_mode == 0:
             text_feats = text_feats.reshape((-1, len(mul_tmp), text_feats.shape[-1]))
@@ -178,7 +181,13 @@ def get_dynamic_obstacles_map_3d(
     # new_obstacles = obstacles_segment_map != 1
     new_obstacles = np.zeros_like(obstacles_cropped, dtype=bool)
     obs_pts = grid_pos[pts_mask]
-    new_obstacles[obs_pts[:, 0] - rmin, obs_pts[:, 1] - cmin] = 1
+    #TODO 更改了边界值
+    tmp_row = obs_pts[:, 0] - rmin
+    tmp_col = obs_pts[:, 1] - cmin
+    tmp_row[tmp_row.max()>= new_obstacles.shape[0]] = new_obstacles.shape[0] - 1
+    tmp_col[tmp_col.max()>= new_obstacles.shape[1]] = new_obstacles.shape[1] - 1
+
+    new_obstacles[tmp_row, tmp_col] = 1
     new_obstacles = np.logical_and(new_obstacles, all_obstacles_mask)
     new_obstacles = np.logical_not(new_obstacles)
 

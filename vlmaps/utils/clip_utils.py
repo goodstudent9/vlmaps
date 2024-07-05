@@ -1,9 +1,11 @@
 import os
 from argparse import ArgumentParser
+import pdb
 import numpy as np
 import cv2
 from PIL import Image
 import torch
+from transformers import  AutoProcessor
 
 import clip
 
@@ -148,6 +150,30 @@ def get_text_feats(in_text, clip_model, clip_feat_dim, batch_size=64):
         text_id += batch_size
     return text_feats
 
+def get_siglip_text_feats(in_text, siglip_model, sigip_feat_dim, batch_size=64):
+    processor = AutoProcessor.from_pretrained("google/siglip-large-patch16-384")
+    tokenizer = processor.tokenizer
+    # pdb.set_trace()
+    text = tokenizer(in_text, padding="max_length")
+    text_tokens = torch.tensor(text.input_ids)
+    if torch.cuda.is_available():
+        text_tokens = text_tokens.cuda()
+    elif torch.backends.mps.is_available():
+        text_tokens = text_tokens.to("mps")
+
+    text_id = 0
+    text_feats = np.zeros((len(in_text), sigip_feat_dim), dtype=np.float32)
+    while text_id < len(text_tokens):  # Batched inference.
+        batch_size = min(len(in_text) - text_id, batch_size)
+        text_batch = text_tokens[text_id : text_id + batch_size]
+        with torch.no_grad():
+            batch_feats = siglip_model(text_batch).pooler_output.float()
+        batch_feats /= batch_feats.norm(dim=-1, keepdim=True)
+        batch_feats = np.float32(batch_feats.cpu())
+        text_feats[text_id : text_id + batch_size, :] = batch_feats
+        text_id += batch_size
+    return text_feats
+    
 
 def get_text_feats_multiple_templates(in_text, clip_model, clip_feat_dim, batch_size=64):
     mul_tmp = multiple_templates.copy()
@@ -217,7 +243,7 @@ def get_lseg_score(
     if use_multiple_templates:
         mul_tmp = multiple_templates.copy()
         multi_temp_landmarks_other = [x.format(lm) for lm in landmarks_other for x in mul_tmp]
-        text_feats = get_text_feats(multi_temp_landmarks_other, clip_model, clip_feat_dim)
+        text_feats = get_siglip_text_feats(multi_temp_landmarks_other, clip_model, clip_feat_dim)
 
         # average the features
         if avg_mode == 0:
